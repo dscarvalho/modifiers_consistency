@@ -1,0 +1,2 @@
+[default]
+    phrase_file_path='data/an_phrases.json'

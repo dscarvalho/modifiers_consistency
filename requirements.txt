@@ -1,0 +1,9 @@
+typing
+pandas
+torch
+transformers
+dynaconf
+nltk
+tqdm
+numpy
+git+https://github.com/dscarvalho/saf.git
