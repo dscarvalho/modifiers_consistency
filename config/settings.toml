@@ -1,2 +1,7 @@
 [default]
     phrase_file_path='data/an_phrases.json'
+    results_path='data/results'
+    encoder='t5'
+    vecop='mul'
+    sentence_encoding=false
+    strict=true

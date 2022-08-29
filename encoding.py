@@ -2,13 +2,17 @@ import torch
 from typing import List
 from torch import Tensor, device as Device
 from transformers import T5EncoderModel, T5TokenizerFast
+from transformers import BertModel, BertTokenizerFast
+from transformers import RobertaModel, RobertaTokenizerFast
 from sentence_transformers import SentenceTransformer
 from data_access.adjectives_nouns import Adjectives, Nouns
 
 VECOPS = {
     "sum": torch.sum,
-    "mul": torch.mul
+    "mul": torch.prod
 }
+
+ENCODERS = ["t5", "bert", "distilroberta"]
 
 
 def get_t5_model(sentence: bool, device: Device):
@@ -17,8 +21,31 @@ def get_t5_model(sentence: bool, device: Device):
     if (sentence):
         model = SentenceTransformer("sentence-transformers/sentence-t5-base").to(device)
     else:
-        tokenizer = T5TokenizerFast.from_pretrained("t5-small")
-        model = T5EncoderModel.from_pretrained("t5-small").to(device)
+        tokenizer = T5TokenizerFast.from_pretrained("t5-base")
+        model = T5EncoderModel.from_pretrained("t5-base").to(device)
+
+    return model, tokenizer
+
+
+def get_bert_model(sentence: bool, device: Device):
+    tokenizer = None
+    model = None
+    if (sentence):
+        model = SentenceTransformer("sentence-transformers/stsb-bert-base").to(device)
+    else:
+        tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
+        model = BertModel.from_pretrained("bert-base-cased").to(device)
+
+    return model, tokenizer
+
+def get_distilroberta_model(sentence: bool, device: Device):
+    tokenizer = None
+    model = None
+    if (sentence):
+        model = SentenceTransformer("sentence-transformers/all-distilroberta-v1").to(device)
+    else:
+        tokenizer = RobertaTokenizerFast.from_pretrained("distilroberta-base")
+        model = RobertaModel.from_pretrained("distilroberta-base").to(device)
 
     return model, tokenizer
 
@@ -50,6 +77,10 @@ class PhraseEncoder:
 
         if (model_name == "t5"):
             self._model, self._tokenizer = get_t5_model(sentence, self.device)
+        elif (model_name == "bert"):
+            self._model, self._tokenizer = get_bert_model(sentence, self.device)
+        elif (model_name == "distilroberta"):
+            self._model, self._tokenizer = get_distilroberta_model(sentence, self.device)
         else:
             raise EncoderNotSupportedException
 
@@ -68,7 +99,7 @@ class PhraseEncoder:
             enc_pooled.index_reduce_(1, torch.tensor(words_idx, dtype=torch.int64).to(self.device),
                                      enc[:, torch.tensor(tokens_idx, dtype=torch.int64).to(self.device)],
                                      "mean", include_self=False)
-            enc = VECOPS[op](enc_pooled, dim=1)
+            enc = torch.squeeze(VECOPS[op](enc_pooled, dim=1))
 
         return enc
 

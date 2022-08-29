@@ -18,8 +18,6 @@ def main():
     """)
 
     phrases = set()
-    # v = enc.encode("happy canadian surgeon", "sum")
-
     for derivation in tqdm(generate(grammar, depth=5), desc="Generating phrases"):
         phrase = list()
         words = set()
