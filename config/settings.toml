@@ -3,5 +3,5 @@
     results_path='data/results'
     encoder='t5'
     vecop='mul'
-    sentence_encoding=false
+    sentence_encoding=true
     strict=true
