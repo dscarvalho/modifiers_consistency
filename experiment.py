@@ -85,29 +85,6 @@ class SetDistanceExperiment(Experiment):
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
 
-class AdjectiveTypeWeightExperiment(Experiment):
-    def run(self, noun: str = None) -> Dict[int, float]:
-        stats_weight = {IDX_ADJ_TYPES[idx]: list() for idx in IDX_ADJ_TYPES}
-        stats_weight_aggr = {IDX_ADJ_TYPES[idx]: 0.0 for idx in IDX_ADJ_TYPES}
-        nouns = Nouns()
-        phrases = [p for p in self.phrases if (len(p) > 1 and (noun is None or list(nouns[noun]) in p))]
-        for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
-            phrase = " ".join(phrase_from_index(idx_phrase))
-            vec = self._enc.encode(phrase, self.vecop)
-
-            dist_phrase_word = [1 - torch.cosine_similarity(vec, self._enc.encode(" ".join(phrase_from_index([p])), self.vecop), dim=0).item()
-                                for p in idx_phrase]
-
-            for idx in IDX_ADJ_TYPES:
-                stats_weight[IDX_ADJ_TYPES[idx]].append(sum([dist_phrase_word[i] for i in range(len(dist_phrase_word))
-                                                         if idx_phrase[i][1] == idx]) / sum(dist_phrase_word))
-
-        for idx in IDX_ADJ_TYPES:
-            stats_weight_aggr[IDX_ADJ_TYPES[idx]] = np.mean(stats_weight[IDX_ADJ_TYPES[idx]])
-
-        return stats_weight_aggr
-
-
 class AdjectiveWeightExperiment(Experiment):
     def run(self, noun: str = None) -> Dict[str, float]:
         adjectives = Adjectives()
@@ -122,12 +99,27 @@ class AdjectiveWeightExperiment(Experiment):
             dist_phrase_word = [1 - torch.cosine_similarity(vec, self._enc.encode(" ".join(phrase_from_index([p])), self.vecop), dim=0).item()
                                 for p in idx_phrase]
 
-            for adj in stats_weight:
-                stats_weight[adj].append(sum([dist_phrase_word[i] for i in range(len(dist_phrase_word))
-                                              if idx_phrase[i][0] == adjectives[adj][0]]) / sum(dist_phrase_word))
+            for adj_dpw in [dpw for dpw in zip(idx_phrase, dist_phrase_word) if (dpw[0][1] > 0)]:
+                stats_weight[adjectives.get_word(adj_dpw[0][0])].append(adj_dpw[1] / sum(dist_phrase_word))
 
         for adj in stats_weight:
             stats_weight_aggr[adj] = np.mean(stats_weight[adj])
+
+        return stats_weight_aggr
+
+
+class AdjectiveTypeWeightExperiment(Experiment):
+    def run(self, noun: str = None) -> Dict[int, float]:
+        adjectives = Adjectives()
+        stats_weight = {IDX_ADJ_TYPES[idx]: list() for idx in IDX_ADJ_TYPES}
+        stats_weight_aggr = {IDX_ADJ_TYPES[idx]: 0.0 for idx in IDX_ADJ_TYPES}
+        adj_stats = AdjectiveWeightExperiment.run(self, noun)
+
+        for adj in adj_stats:
+            stats_weight[IDX_ADJ_TYPES[adjectives[adj][1]]].append(adj_stats[adj])
+
+        for idx in stats_weight:
+            stats_weight_aggr[idx] = np.mean(stats_weight[idx])
 
         return stats_weight_aggr
 
