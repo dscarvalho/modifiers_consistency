@@ -18,6 +18,7 @@ IDX_ADJ_TYPES = {v: k for k, v in ADJ_TYPES.items()}
 class WordSet:
     def __init__(self):
         self._word_data: Dict[str, Tuple[int, int]] = dict()
+        self._synonyms: Dict[int, str] = dict()
         self._index: Dict[int, str] = dict()
 
     def __getitem__(self, item: str):
@@ -30,8 +31,14 @@ class WordSet:
     def __contains__(self, item):
         return item in self._word_data
 
-    def get_word(self, idx) -> str:
+    def __len__(self, item):
+        return len(self._word_data)
+
+    def get_word(self, idx: int) -> str:
         return self._index[idx]
+
+    def get_synonym(self, word: int) -> str:
+        return self._synonyms[word]
 
 
 class Adjectives(WordSet):
@@ -53,9 +60,12 @@ class Nouns(WordSet):
         super(Nouns, self).__init__()
         adjectives_df = pd.read_csv(ADJ_PATH)
         nouns = adjectives_df["Nouns"].tolist()
+        synonyms = adjectives_df["Synonyms [Nouns]"].tolist()
         idx = 0
-        for noun in nouns:
+        for noun, synonym in zip(nouns, synonyms):
             if (not pd.isna(noun)):
-                self._word_data[noun.lower()] = (idx, 0)
-                self._index[idx] = noun.lower()
+                noun = noun.lower()
+                self._word_data[noun] = (idx, 0)
+                self._synonyms[idx] = synonym.lower()
+                self._index[idx] = noun
                 idx += 1

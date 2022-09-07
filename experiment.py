@@ -18,7 +18,8 @@ class Experiment:
                  encoder: str = settings["encoder"],
                  vecop: str = settings["vecop"],
                  sent_enc: bool = settings["sentence_encoding"],
-                 strict: bool = settings["strict"]):
+                 strict: bool = settings["strict"],
+                 control: int = settings["control"]):
         with open(filepath) as anfile:
             self.phrases: List[List[List[int]]] = json.load(anfile)
 
@@ -27,6 +28,7 @@ class Experiment:
         self.vecop: str = vecop
         self.sent_enc: bool = sent_enc
         self.strict: bool = strict
+        self.control: int = control
         self._enc = PhraseEncoder(self.encoder, self.sent_enc)
 
     def group(self):
@@ -37,18 +39,19 @@ class Experiment:
 
 
 class SetDistanceExperiment(Experiment):
-
     def run(self, noun: str = None) -> Dict[Tuple[int], float]:
         stats = dict()
         nouns = Nouns()
         phrases = [p for p in self.phrases if (len(p) > 1 and (noun is None or list(nouns[noun]) in p))]
+        ctrl = self.control
         i = 0
         for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
             # print("Phrase:", phrase_from_index(idx_phrase))
             phrase = " ".join(phrase_from_index(idx_phrase))
             vec = self._enc.encode(phrase, self.vecop)
 
-            dist_phrase_word = [1 - torch.cosine_similarity(vec, self._enc.encode(" ".join(phrase_from_index([p])), self.vecop), dim=0).item()
+            dist_phrase_word = [1 - torch.cosine_similarity(vec, self._enc.encode(" ".join(phrase_from_index([p], bool(ctrl & 1))), self.vecop),
+                                                            dim=0).item()
                                 for p in idx_phrase]
 
             dist_comb_compl = list()
@@ -62,8 +65,8 @@ class SetDistanceExperiment(Experiment):
                         dupl.add(tuple(phrase_from_index(compl)))
                         if (compl):
                             # print("Complement:", phrase_from_index(compl))
-                            dist_compl = 1 - torch.cosine_similarity(self._enc.encode(" ".join(phrase_from_index(comb)), self.vecop),
-                                                                     self._enc.encode(" ".join(phrase_from_index(compl)), self.vecop),
+                            dist_compl = 1 - torch.cosine_similarity(self._enc.encode(" ".join(phrase_from_index(comb, bool(ctrl & 2))), self.vecop),
+                                                                     self._enc.encode(" ".join(phrase_from_index(compl, bool(ctrl & 2))), self.vecop),
                                                                      dim=0).item()
                             dist_comb_compl.append(dist_compl)
 
@@ -124,10 +127,32 @@ class AdjectiveTypeWeightExperiment(Experiment):
         return stats_weight_aggr
 
 
+class SynPhraseDistanceExperiment(Experiment):
+    def run(self, noun: str = None) -> Dict[Tuple[int], float]:
+        stats = dict()
+        nouns = Nouns()
+        phrases = [p for p in self.phrases if (len(p) > 1 and (noun is None or list(nouns[noun]) in p))]
+        for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
+            types = tuple([w[1] for w in idx_phrase[:-1]])
+            phrase = " ".join(phrase_from_index(idx_phrase))
+            syn_phrase = " ".join(phrase_from_index(idx_phrase, True))
+            vec = self._enc.encode(phrase, self.vecop)
+            syn_vec = self._enc.encode(syn_phrase, self.vecop)
+            dist_syn_phrase = 1 - torch.cosine_similarity(vec, syn_vec, dim=0).item()
+
+            if (types not in stats):
+                stats[types] = list()
+
+            stats[types].append(dist_syn_phrase)
+
+        return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
+
+
 EXPERIMENTS = {
     "setdistance": SetDistanceExperiment,
     "adjtypeweight": AdjectiveTypeWeightExperiment,
-    "adjweight": AdjectiveWeightExperiment
+    "adjweight": AdjectiveWeightExperiment,
+    "synphrasedist": SynPhraseDistanceExperiment
 }
 
 
@@ -149,12 +174,13 @@ def exp_run(exp: Experiment):
     sent_config = "-sent" if exp.sent_enc else ""
     vecop = "-" + exp.vecop if not exp.sent_enc else ""
     strict = "-strict" if exp.strict else ""
+    control = f"-ctrl{exp.control}" if exp.control else ""
     results_path = f"{settings['results_path']}/{exp_name}"
 
     if (not os.path.exists(results_path)):
         os.makedirs(results_path)
 
-    with open(f"{results_path}/results_{exp.encoder}{sent_config}{vecop}{strict}.json", "w") as outfile:
+    with open(f"{results_path}/results_{exp.encoder}{sent_config}{vecop}{strict}{control}.json", "w") as outfile:
         json.dump({str(key): avgs[key] for key in avgs}, outfile, indent=2)
 
 
@@ -171,7 +197,8 @@ def main(argv):
         exp = EXPERIMENTS[argv[1]]()
         sent_config = "sent" if exp.sent_enc else ""
         strict = "strict" if exp.strict else ""
-        print("Running config:", settings["encoder"], settings["vecop"], sent_config, strict)
+        control = f"-ctrl{exp.control}" if exp.control else ""
+        print("Running config:", settings["encoder"], settings["vecop"], sent_config, strict, control)
         exp_run(exp)
     else:
         print("Experiment not recognized. Must be one of: " + " | ".join(EXPERIMENTS.keys()))

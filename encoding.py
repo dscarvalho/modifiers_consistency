@@ -50,13 +50,16 @@ def get_distilroberta_model(sentence: bool, device: Device):
     return model, tokenizer
 
 
-def phrase_from_index(idx_phrase: List[List[int]]):
+def phrase_from_index(idx_phrase: List[List[int]], synonym: bool = False):
     decoded = list()
     adjectives = Adjectives()
     nouns = Nouns()
     for idx_word, idx_type in idx_phrase:
         if (idx_type == 0):
-            decoded.append(nouns.get_word(idx_word))
+            if (not synonym):
+                decoded.append(nouns.get_word(idx_word))
+            else:
+                decoded.append(nouns.get_synonym(idx_word))
         else:
             decoded.append(adjectives.get_word(idx_word))
 

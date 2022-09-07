@@ -5,3 +5,4 @@
     vecop='sum'
     sentence_encoding=true
     strict=true
+    control=0
