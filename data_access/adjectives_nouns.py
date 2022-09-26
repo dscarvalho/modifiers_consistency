@@ -48,9 +48,11 @@ class Adjectives(WordSet):
         idx = 0
         for adj_type in ADJ_TYPES:
             adjectives = adjectives_df[adj_type].tolist()
-            for adj in adjectives:
+            synonyms = adjectives_df["SYN " + adj_type].tolist()
+            for adj, synonym in zip(adjectives, synonyms):
                 if (not pd.isna(adj)):
                     self._word_data[adj.lower()] = (idx, ADJ_TYPES[adj_type])
+                    self._synonyms[idx] = synonym.lower()
                     self._index[idx] = adj.lower()
                     idx += 1
 
@@ -60,7 +62,7 @@ class Nouns(WordSet):
         super(Nouns, self).__init__()
         adjectives_df = pd.read_csv(ADJ_PATH)
         nouns = adjectives_df["Nouns"].tolist()
-        synonyms = adjectives_df["Synonyms [Nouns]"].tolist()
+        synonyms = adjectives_df["SYN Nouns"].tolist()
         idx = 0
         for noun, synonym in zip(nouns, synonyms):
             if (not pd.isna(noun)):

@@ -26,7 +26,7 @@ def main():
                 phrase.append(word)
                 words.add(word)
 
-        # print(phrase)
+        print(phrase)
         idxs = tuple([adjectives[w] if w in adjectives else nouns[w] for w in phrase])
         phrases.add(idxs)
 

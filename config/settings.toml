@@ -1,7 +1,7 @@
 [default]
     phrase_file_path='data/an_phrases.json'
     results_path='data/results'
-    encoder='bert'
+    encoder='distilroberta'
     vecop='sum'
     sentence_encoding=true
     strict=true

@@ -3,13 +3,20 @@ import os
 import json
 import numpy as np
 import torch
+import logging
 from typing import List, Dict, Tuple
-from itertools import combinations
+from itertools import combinations, product
 from dynaconf import settings
 from joblib import Parallel, delayed, cpu_count
 from tqdm import tqdm
 from encoding import PhraseEncoder, phrase_from_index, ENCODERS, VECOPS
 from data_access.adjectives_nouns import Nouns, Adjectives, IDX_ADJ_TYPES
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+logger.addHandler(ch)
 
 
 class Experiment:
@@ -47,7 +54,7 @@ class SetDistanceExperiment(Experiment):
         i = 0
         for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
             # print("Phrase:", phrase_from_index(idx_phrase))
-            phrase = " ".join(phrase_from_index(idx_phrase))
+            phrase = " ".join(phrase_from_index(idx_phrase, ctrl < 0))
             vec = self._enc.encode(phrase, self.vecop)
 
             dist_phrase_word = [1 - torch.cosine_similarity(vec, self._enc.encode(" ".join(phrase_from_index([p], bool(ctrl & 1))), self.vecop),
@@ -148,15 +155,57 @@ class SynPhraseDistanceExperiment(Experiment):
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
 
+class NonIntersectivityExperiment(Experiment):
+    def run(self, noun: str = None) -> Dict[Tuple[int], float]:
+        stats = dict()
+        nouns = Nouns()
+        phrases = [p for p in self.phrases if (len(p) == 2 and (list(nouns[noun]) in p))]
+        for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
+            if (self.control != 0):
+                syn_cases = [(1, 0)] #product([0, 1], [0, 1])
+            else:
+                syn_cases = [(0, 0)]
+
+            for adj_syn, noun_syn in syn_cases:
+                types = tuple([w[1] for w in idx_phrase[:-1]])
+                phrase = " ".join(phrase_from_index(idx_phrase))
+                vec = self._enc.encode(phrase, self.vecop)
+
+                dist_phrase_adj = 1 - torch.cosine_similarity(vec,
+                                                              self._enc.encode(" ".join(phrase_from_index([idx_phrase[0]],
+                                                                                                          bool(adj_syn))),
+                                                                               self.vecop),
+                                                              dim=0).item()
+                dist_phrase_noun = 1 - torch.cosine_similarity(vec,
+                                                               self._enc.encode(" ".join(phrase_from_index([idx_phrase[1]],
+                                                                                                           bool(noun_syn))),
+                                                                                self.vecop),
+                                                               dim=0).item()
+
+                if (types not in stats):
+                    stats[types] = list()
+
+                stats[types].append(int(dist_phrase_adj < dist_phrase_noun))
+
+        return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
+
+
 EXPERIMENTS = {
     "setdistance": SetDistanceExperiment,
     "adjtypeweight": AdjectiveTypeWeightExperiment,
     "adjweight": AdjectiveWeightExperiment,
-    "synphrasedist": SynPhraseDistanceExperiment
+    "synphrasedist": SynPhraseDistanceExperiment,
+    "nonintersect": NonIntersectivityExperiment
 }
 
 
 def exp_run(exp: Experiment):
+    sent_config = "sent" if exp.sent_enc else ""
+    strict = "strict" if exp.strict else ""
+    control = f"-ctrl{exp.control}" if (exp.control and type(exp) == SetDistanceExperiment) else ""
+    logger.info(f"Running {type(exp).__name__}")
+    logger.info(f"Running config: {exp.encoder}, {exp.vecop}, {sent_config}, {strict}, {control}")
+
     results = Parallel(n_jobs=cpu_count(True))(delayed(exp.run)(noun) for noun, idxs in Nouns())
     aggr = dict()
     avgs = dict()
@@ -174,7 +223,6 @@ def exp_run(exp: Experiment):
     sent_config = "-sent" if exp.sent_enc else ""
     vecop = "-" + exp.vecop if not exp.sent_enc else ""
     strict = "-strict" if exp.strict else ""
-    control = f"-ctrl{exp.control}" if exp.control else ""
     results_path = f"{settings['results_path']}/{exp_name}"
 
     if (not os.path.exists(results_path)):
@@ -186,22 +234,21 @@ def exp_run(exp: Experiment):
 
 def main(argv):
     if ("all" in argv):
-        print("Running all...")
+        logger.info("Running all...")
         for enc in ENCODERS:
-            for vecop in VECOPS:
-                for sent_enc in (True, False):
-                    for strict in (True, False):
-                        exp = SetDistanceExperiment(encoder=enc, vecop=vecop, sent_enc=sent_enc, strict=strict)
-                        exp_run(exp)
+                exp = SetDistanceExperiment(encoder=enc, vecop="mean", sent_enc=True, strict=True)
+                exp_run(exp)
+                exp = AdjectiveTypeWeightExperiment(encoder=enc, vecop="mean", sent_enc=True, strict=True)
+                exp_run(exp)
+                exp = SynPhraseDistanceExperiment(encoder=enc, vecop="mean", sent_enc=True, strict=True)
+                exp_run(exp)
+                exp = NonIntersectivityExperiment(encoder=enc, vecop="mean", sent_enc=True, strict=True)
+                exp_run(exp)
     elif (len(argv) > 1 and argv[1] in EXPERIMENTS):
         exp = EXPERIMENTS[argv[1]]()
-        sent_config = "sent" if exp.sent_enc else ""
-        strict = "strict" if exp.strict else ""
-        control = f"-ctrl{exp.control}" if exp.control else ""
-        print("Running config:", settings["encoder"], settings["vecop"], sent_config, strict, control)
         exp_run(exp)
     else:
-        print("Experiment not recognized. Must be one of: " + " | ".join(EXPERIMENTS.keys()))
+        logger.error("Experiment not recognized. Must be one of: " + " | ".join(EXPERIMENTS.keys()))
 
 
 if __name__ == "__main__":
