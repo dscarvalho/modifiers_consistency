@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import gensim.downloader as gensim_api
-from typing import List
+from typing import List, Tuple
 from torch import Tensor, device as Device
 from transformers import T5EncoderModel, T5TokenizerFast
 from transformers import BertModel, BertTokenizerFast
@@ -15,41 +15,26 @@ VECOPS = {
     "mean": lambda x: torch.mean(x, dim=0)
 }
 
-ENCODERS = ["t5", "bert", "distilroberta", "glove", "word2vec"]
+ENCODERS = {
+    "t5": ("sentence-transformers/sentence-t5-base", "t5-base", "transformer", T5EncoderModel, T5TokenizerFast),
+    "bert": ("sentence-transformers/stsb-bert-base", "bert-base-cased", "transformer", BertModel, BertTokenizerFast),
+    "distilroberta": ("sentence-transformers/all-distilroberta-v1", "distilroberta-base", "transformer", RobertaModel, RobertaTokenizerFast),
+    "dpr": ("sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base", None, "transformer"),
+    "labse": ("sentence-transformers/LaBSE", None, "transformer"),
+    "minilm": ("sentence-transformers/all-MiniLM-L6-v2", None, "transformer"),
+    "glove": ("glove-wiki-gigaword-300", None, "gensim"),
+    "word2vec": ("word2vec-google-news-300", None, "gensim")
+}
 
 
-def get_t5_model(sentence: bool, device: Device):
+def get_transformer_model(enc_name: Tuple[str], sentence: bool, device: Device):
     tokenizer = None
     model = None
     if (sentence):
-        model = SentenceTransformer("sentence-transformers/sentence-t5-base").to(device)
+        model = SentenceTransformer(enc_name[0]).to(device)
     else:
-        tokenizer = T5TokenizerFast.from_pretrained("t5-base")
-        model = T5EncoderModel.from_pretrained("t5-base").to(device)
-
-    return model, tokenizer
-
-
-def get_bert_model(sentence: bool, device: Device):
-    tokenizer = None
-    model = None
-    if (sentence):
-        model = SentenceTransformer("sentence-transformers/stsb-bert-base").to(device)
-    else:
-        tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased")
-        model = BertModel.from_pretrained("bert-base-cased").to(device)
-
-    return model, tokenizer
-
-
-def get_distilroberta_model(sentence: bool, device: Device):
-    tokenizer = None
-    model = None
-    if (sentence):
-        model = SentenceTransformer("sentence-transformers/all-distilroberta-v1").to(device)
-    else:
-        tokenizer = RobertaTokenizerFast.from_pretrained("distilroberta-base")
-        model = RobertaModel.from_pretrained("distilroberta-base").to(device)
+        tokenizer = enc_name[4].from_pretrained(enc_name[1])
+        model = enc_name[3].from_pretrained(enc_name[1]).to(device)
 
     return model, tokenizer
 
@@ -100,17 +85,12 @@ class PhraseEncoder:
         self._tokenizer = None
         self._model = None
         self._sentence = sentence
+        enc_name = ENCODERS[model_name]
 
-        if (model_name == "t5"):
-            self._model, self._tokenizer = get_t5_model(sentence, self.device)
-        elif (model_name == "bert"):
-            self._model, self._tokenizer = get_bert_model(sentence, self.device)
-        elif (model_name == "distilroberta"):
-            self._model, self._tokenizer = get_distilroberta_model(sentence, self.device)
-        elif (model_name == "glove"):
-            self._model = GensimModel("glove-wiki-gigaword-300", self.device)
-        elif (model_name == "word2vec"):
-            self._model = GensimModel("word2vec-google-news-300", self.device)
+        if (enc_name[2] == "transformer"):
+            self._model, self._tokenizer = get_transformer_model(enc_name, sentence, self.device)
+        elif (enc_name[2] == "gensim"):
+            self._model = GensimModel(enc_name[0], self.device)
         else:
             raise EncoderNotSupportedException
 

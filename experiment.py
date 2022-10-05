@@ -88,8 +88,8 @@ class SetDistanceExperiment(Experiment):
                 stats[tuple([w[1] for w in idx_phrase[:-1]])].append([dpw <= dcc
                                                                       for dpw in dist_phrase_word
                                                                       for dcc in dist_comb_compl])
-            if (i % 1000 == 0):
-                print({tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats})
+            # if (i % 1000 == 0):
+            #     print({tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats})
             i += 1
 
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
@@ -206,7 +206,7 @@ def exp_run(exp: Experiment):
     logger.info(f"Running {type(exp).__name__}")
     logger.info(f"Running config: {exp.encoder}, {exp.vecop}, {sent_config}, {strict}, {control}")
 
-    results = Parallel(n_jobs=cpu_count(True))(delayed(exp.run)(noun) for noun, idxs in Nouns())
+    results = Parallel(n_jobs=cpu_count(True) // 4)(delayed(exp.run)(noun) for noun, idxs in Nouns())
     aggr = dict()
     avgs = dict()
 
