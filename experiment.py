@@ -190,12 +190,47 @@ class NonIntersectivityExperiment(Experiment):
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
 
+class PairSetDistanceExperiment(Experiment):
+    def run(self, noun: str = None) -> Dict[Tuple[int], float]:
+        stats = dict()
+        nouns = Nouns()
+        adjectives = Adjectives()
+        other_nouns = [nm[0] for nm in nouns if (nm[1][0] > nouns[noun][0])]
+        adj_comb = set()
+
+        for other_noun in tqdm(other_nouns, desc=f"Progress ({noun})"):
+            for adj1 in adjectives:
+                for adj2 in (adj for adj in adjectives if adj[0] != adj1[0]):
+                    if ((adj1[1][0], adj2[1][0]) not in adj_comb):
+                        adj_comb.add((adj1[1][0], adj2[1][0]))
+                        adj_comb.add((adj2[1][0], adj1[1][0]))
+                    else:
+                        continue
+                    types = (adj1[1][1], adj2[1][1])
+                    phrases = (" ".join([adj1[0], noun]),
+                               " ".join([adj1[0], other_noun]),
+                               " ".join([adj2[0], noun]),
+                               " ".join([adj2[0], other_noun]))
+                    # print(list(phrases))
+                    vecs = [self._enc.encode(phrase, self.vecop) for phrase in phrases]
+                    dist_adj1 = 1 - torch.cosine_similarity(vecs[0], vecs[1], dim=0).item()
+                    dist_adj2 = 1 - torch.cosine_similarity(vecs[2], vecs[3], dim=0).item()
+
+                    if (types not in stats):
+                        stats[types] = list()
+
+                    stats[types].append(int(dist_adj1 < dist_adj2))
+
+        return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
+
+
 EXPERIMENTS = {
     "setdistance": SetDistanceExperiment,
     "adjtypeweight": AdjectiveTypeWeightExperiment,
     "adjweight": AdjectiveWeightExperiment,
     "synphrasedist": SynPhraseDistanceExperiment,
-    "nonintersect": NonIntersectivityExperiment
+    "nonintersect": NonIntersectivityExperiment,
+    "pairsetdist": PairSetDistanceExperiment
 }
 
 
