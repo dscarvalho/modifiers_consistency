@@ -71,22 +71,8 @@ class SetDistanceExperiment(Experiment):
             dist_phrases_words = torch.stack([1 - torch.cosine_similarity(vec_phrases, vec_words[:, k], dim=-1)
                                               for k in range(vec_words.shape[1])]).T
 
-
-            # dist_phrases_words_ = list()
-            # for j in range(vec_phrases.shape[0]):
-            #     dist_phrase_word = [
-            #         1 - torch.cosine_similarity(
-            #             vec_phrases[j], self._enc.encode([" ".join(phrase_from_index([p], bool(ctrl & 1)))], self.vecop, cache=True),
-            #             dim=-1
-            #         ).item()
-            #         for p in phrases[i:i + bsize][j]
-            #     ]
-            #     dist_phrases_words_.append(dist_phrase_word)
-
-
             compl_phrases_idxs = dict()
             max_combs = 0
-            # dist_comb_compl_ = list()
             for j in range(vec_phrases.shape[0]):
                 for k in range(1, len(phrases[i:i + bsize][j]) + 1):
                     combs = combinations(phrases[i:i + bsize][j], k)
@@ -107,10 +93,6 @@ class SetDistanceExperiment(Experiment):
                                         compl_phrases_idxs[p] = list()
                                     compl_phrases_idxs[p].append((j, comb_idx, p_idx))
 
-                                # dist_compl = 1 - torch.cosine_similarity(self._enc.encode(" ".join(phrase_from_index(comb, bool(ctrl & 2))), self.vecop),
-                                #                                          self._enc.encode(" ".join(phrase_from_index(compl, bool(ctrl & 2))), self.vecop),
-                                #                                          dim=0).item()
-                                # dist_comb_compl_.append(dist_compl)
             compl_phrases = list(compl_phrases_idxs.keys())
             compl_embs = self._enc.encode(compl_phrases, self.vecop)
             vec_compls = torch.zeros(vec_phrases.shape[0], max_combs, 2, vec_phrases.shape[-1], device=self._enc.device)
@@ -222,19 +204,6 @@ class SynPhraseDistanceExperiment(Experiment):
             for j in range(vec_phrases.shape[0]):
                 stats[phrase_types[j]].append(dist_syn_phrases[j].item())
 
-        # for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
-        #     types = tuple([w[1] for w in idx_phrase[:-1]])
-        #     phrase = " ".join(phrase_from_index(idx_phrase))
-        #     syn_phrase = " ".join(phrase_from_index(idx_phrase, True))
-        #     vec = self._enc.encode(phrase, self.vecop)
-        #     syn_vec = self._enc.encode(syn_phrase, self.vecop)
-        #     dist_syn_phrase = 1 - torch.cosine_similarity(vec, syn_vec, dim=0).item()
-        #
-        #     if (types not in stats):
-        #         stats[types] = list()
-        #
-        #     stats[types].append(dist_syn_phrase)
-
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
 
@@ -277,33 +246,6 @@ class NonSubsectivityExperiment(Experiment):
             for j in range(vec_phrases.shape[0]):
                 stats[phrase_types[j]].append(dist_adj_noun_comp[j].item())
 
-        # for idx_phrase in tqdm(phrases, desc=f"Progress ({noun})"):
-        #     if (self.control != 0):
-        #         syn_cases = [(1, 0)] #product([0, 1], [0, 1])
-        #     else:
-        #         syn_cases = [(0, 0)]
-        #
-        #     for adj_syn, noun_syn in syn_cases:
-        #         types = tuple([w[1] for w in idx_phrase[:-1]])
-        #         phrase = " ".join(phrase_from_index(idx_phrase))
-        #         vec = self._enc.encode(phrase, self.vecop)
-        #
-        #         dist_phrase_adj = 1 - torch.cosine_similarity(vec,
-        #                                                       self._enc.encode(" ".join(phrase_from_index([idx_phrase[0]],
-        #                                                                                                   bool(adj_syn))),
-        #                                                                        self.vecop),
-        #                                                       dim=0).item()
-        #         dist_phrase_noun = 1 - torch.cosine_similarity(vec,
-        #                                                        self._enc.encode(" ".join(phrase_from_index([idx_phrase[1]],
-        #                                                                                                    bool(noun_syn))),
-        #                                                                         self.vecop),
-        #                                                        dim=0).item()
-        #
-        #         if (types not in stats):
-        #             stats[types] = list()
-        #
-        #         stats[types].append(int(dist_phrase_adj < dist_phrase_noun))
-
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
 
@@ -313,7 +255,6 @@ class PairSetDistanceExperiment(Experiment):
         nouns = Nouns()
         adjectives = Adjectives()
         other_nouns = [nm[0] for nm in nouns if (nm[1][0] > nouns[noun][0])]
-        adj_comb = set()
         phrases_idx = dict()
         batch_phrases = list()
         phrase_types = list()
@@ -333,9 +274,6 @@ class PairSetDistanceExperiment(Experiment):
 
                     batch_phrases.append(tuple([phrases_idx[phrase] for phrase in phrases]))
                     phrase_types.append(types)
-                    # vecs = [self._enc.encode(phrase, self.vecop) for phrase in phrases]
-                    # dist_adj1 = 1 - torch.cosine_similarity(vecs[0], vecs[1], dim=0).item()
-                    # dist_adj2 = 1 - torch.cosine_similarity(vecs[2], vecs[3], dim=0).item()
 
                     if (types not in stats):
                         stats[types] = list()
@@ -348,30 +286,6 @@ class PairSetDistanceExperiment(Experiment):
                 dist_adj1 = 1 - torch.cosine_similarity(vecs[0], vecs[1], dim=0).item()
                 dist_adj2 = 1 - torch.cosine_similarity(vecs[2], vecs[3], dim=0).item()
                 stats[phrase_types[i]].append(int(dist_adj1 < dist_adj2))
-
-
-        # for other_noun in tqdm(other_nouns, desc=f"Progress ({noun})"):
-        #     for adj1 in adjectives:
-        #         for adj2 in (adj for adj in adjectives if adj[0] != adj1[0]):
-        #             # if ((adj1[1][0], adj2[1][0]) not in adj_comb):
-        #             #     adj_comb.add((adj1[1][0], adj2[1][0]))
-        #             #     adj_comb.add((adj2[1][0], adj1[1][0]))
-        #             # else:
-        #             #     continue
-        #             types = (adj1[1][1], adj2[1][1])
-        #             phrases = (" ".join([adj1[0], noun]),
-        #                        " ".join([adj1[0], other_noun]),
-        #                        " ".join([adj2[0], noun]),
-        #                        " ".join([adj2[0], other_noun]))
-        #             # print(list(phrases))
-        #             vecs = [self._enc.encode(phrase, self.vecop) for phrase in phrases]
-        #             dist_adj1 = 1 - torch.cosine_similarity(vecs[0], vecs[1], dim=0).item()
-        #             dist_adj2 = 1 - torch.cosine_similarity(vecs[2], vecs[3], dim=0).item()
-        #
-        #             if (types not in stats):
-        #                 stats[types] = list()
-        #
-        #             stats[types].append(int(dist_adj1 < dist_adj2))
 
         return {tuple([IDX_ADJ_TYPES[t] for t in k]): np.mean(stats[k]) for k in stats}
 
