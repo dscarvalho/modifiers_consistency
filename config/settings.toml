@@ -1,8 +1,11 @@
 [default]
     phrase_file_path='data/an_phrases.json'
     results_path='data/results'
-    encoder='word2vec'
+    encoder='dpr'
     vecop='sum'
     sentence_encoding=true
     strict=true
     control=0
+    batch_size=1000
+    openai_auth_file='openai_auth.json'
+

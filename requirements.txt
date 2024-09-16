@@ -1,9 +1,11 @@
 pandas
 torch
 transformers
+sentence-transformers
 dynaconf
 nltk
 tqdm
 numpy
 gensim
-git+https://github.com/dscarvalho/saf.git
+saf-nlp
+openai
